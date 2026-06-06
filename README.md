@@ -64,16 +64,54 @@ A successful build produces:
 
 ---
 
+## Sample Files
+
+The `samples/` directory contains example Kotlin files. Use the `LINVAST.Runner` console project to parse them and print the resulting AST.
+
+| Directory | File | Description |
+|-----------|------|-------------|
+| `samples/valid/` | `Functions.kt` | Function declarations with parameters, return types, and bodies |
+| `samples/valid/` | `Expressions.kt` | Arithmetic, logical, comparison, and unary expressions |
+| `samples/valid/` | `ControlFlow.kt` | `if`/`else`, `while`, and assignment operators |
+| `samples/unsupported/` | `ForLoop.kt` | Throws `NotImplementedException` - `for` is not supported |
+| `samples/unsupported/` | `Lambdas.kt` | Throws `NotImplementedException` - lambdas are not supported |
+| `samples/unsupported/` | `ExpressionBody.kt` | Throws `NotImplementedException` - expression body functions are not supported |
+
+Run a sample (from the repository root):
+
+```
+dotnet run --project LINVAST.Runner samples/valid/Functions.kt
+dotnet run --project LINVAST.Runner samples/unsupported/ForLoop.kt
+```
+
+You can also point it at any `.kt` file:
+
+```
+dotnet run --project LINVAST.Runner path/to/your/file.kt
+```
+
+---
+
 ## Tests
 
 Tests live in `LINVAST.Tests/Imperative/Builders/Kotlin/` and use NUnit 3.
 
 | File | What it covers |
 |------|---------------|
-| `TypeTests.cs` | `VisitUserType`, `VisitSimpleUserType`, `VisitNullableType`, `VisitTypeReference`, `VisitFunctionType` |
-| `SourceTests.cs` | `VisitKotlinFile` - only empty file parsing for now |
+| `TypeTests.cs` | Kotlin type visitors: user types, nullable types, function types |
+| `DeclarationTests.cs` | Variable and property declarations (`val`, `var`) |
+| `ExpressionTests.cs` | Arithmetic, logic, comparison, unary expressions, literals, identifiers |
+| `StatementTests.cs` | `if`, `while`, `return`, assignment expressions |
+| `FunctionTests.cs` | Function declarations, parameter lists, function bodies |
+| `SourceTests.cs` | Top-level Kotlin file parsing |
 
-Run all Kotlin tests:
+Run all tests:
+
+```bash
+dotnet test
+```
+
+Run only Kotlin tests:
 
 ```bash
 dotnet test --filter "FullyQualifiedName~Builders.Kotlin"
@@ -84,5 +122,29 @@ Run a specific test class:
 ```bash
 dotnet test --filter "FullyQualifiedName~Builders.Kotlin.TypeTests"
 ```
+
+Expected output:
+
+```
+Passed! - Failed: 0, Passed: 81, Skipped: 0, Total: 81
+```
+
+---
+
+## Known Limitations
+
+The following Kotlin constructs are not yet supported and will throw `NotImplementedException`:
+
+| Construct | Example |
+|-----------|---------|
+| `for` loops | `for (x in list) { }` |
+| `do-while` loops | `do { } while (cond)` |
+| `break` / `continue` | Inside loops |
+| Expression body functions | `fun double(x: Int) = x * 2` |
+| Lambda expressions | `{ x -> x + 1 }` |
+| `is` / `in` operators | `x is Int`, `x in list` |
+| Elvis operator | `x ?: default` |
+| Type casts | `x as Int` |
+| String interpolation | `"Hello $name"` |
 
 
