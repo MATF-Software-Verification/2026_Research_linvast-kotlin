@@ -1,0 +1,862 @@
+\documentclass[a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{fullpage}
+\usepackage[T1]{fontenc}
+\usepackage[serbian]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{csquotes}
+\usepackage{tabularx}
+\usepackage{listings}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=cyan, citecolor=blue}
+
+\definecolor{codebg}{rgb}{0.97,0.97,0.97}
+\definecolor{codecomment}{rgb}{0.4,0.4,0.4}
+\definecolor{codekeyword}{rgb}{0.0,0.3,0.7}
+\definecolor{codestring}{rgb}{0.2,0.5,0.2}
+
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\small,
+    commentstyle=\color{codecomment},
+    keywordstyle=\color{codekeyword}\bfseries,
+    stringstyle=\color{codestring},
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{gray!30},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=6pt,
+    xleftmargin=1.5em,
+    xrightmargin=0.5em,
+}
+
+\lstdefinelanguage{Kotlin}{
+    keywords={fun, val, var, if, else, while, for, return, import, class, object,
+              interface, when, is, in, null, true, false, do, break, continue, throw},
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    sensitive=true
+}
+
+\lstdefinelanguage{CSharp}{
+    keywords={public, private, protected, internal, sealed, partial, override,
+              class, interface, using, namespace, return, if, else, throw, null,
+              var, void, string, int, bool, new, this, base},
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    sensitive=true
+}
+\renewcommand{\lstlistingname}{Isečak koda}
+
+\begin{document}
+
+\title{Podrška za Kotlin u okviru LINVAST biblioteke\\
+\small{Opis sistema u okviru seminarskog rada\\
+Matematički fakultet, Univerzitet u Beogradu}}
+\author{Anđela Jovanović\\
+\texttt{mi251035@alas.matf.bg.ac.rs}}
+\date{Jun 2026.}
+
+\maketitle
+\begin{abstract}
+Ovaj rad opisuje proširenje biblioteke LINVAST podrškom za programski jezik
+Kotlin. LINVAST je .NET biblioteka koja definiše jezički invarijantno
+apstraktno sintaksičko stablo (AST) za imperativne jezike, omogućavajući
+analizu i poređenje programa pisanih u različitim jezicima kroz jedinstvenu
+reprezentaciju.
+\end{abstract}
+\tableofcontents
+\newpage
+
+% -----------------------------------------------------------------------
+\section{Opis problema}
+% -----------------------------------------------------------------------
+
+U ovom poglavlju se opisuju motivacija za uvođenje jezički invarijantne statičke
+analize i konkretni ciljevi koji se ovim radom ostvaruju.
+
+\subsection{Motivacija}
+
+Alati za statičku analizu programa tipično su namenjeni jednom konkretnom
+programskom jeziku. Kada je potrebno primeniti istu vrstu analize, kao što su
+detekcija mrtvog koda, izračunavanje konstantnih izraza ili provera ispravnosti
+kontrolnog toka, na programe pisane u različitim jezicima, razvojni timovi su
+prinuđeni da održavaju zasebne, jezički specifične alate, ili da značajno suzuju
+obuhvat same analize.
+
+\vspace{2px}
+Apstraktno sintaksičko stablo (skr.~AST) nastaje kao rezultat sintaksičke
+analize ulaznog programa i čini osnovu za semantičku analizu i kasniju fazu
+kompilacije~\cite{ristovic2020}. Budući da je AST vezan za gramatiku konkretnog
+programskog jezika, programi pisani u različitim jezicima ne mogu se direktno
+porediti posmatranjem njihovih stabala, što je posebno ograničavajuće u
+kontekstu migracije na nove tehnologije ili provere ekvivalentnosti implementacija.
+
+\vspace{2px}
+\textbf{LINVAST} (Language-INVariant AST) je .NET biblioteka koja rešava
+ovaj problem definisanjem \emph{jedinstvenog apstraktnog sintaksičkog stabla}
+sposobnog da predstavi programe iz više imperativnih programskih jezika. Za svaki
+podržani jezik postoji poseban \emph{graditelj} (engl.\ \emph{builder}) koji
+parsira izvorni kod i preslikava ga u ovu zajedničku reprezentaciju. Jednom kada
+se program prevede u LINVAST oblik, konstrukti poput deklaracija, izraza,
+kontrolnog toka i funkcija mogu se upoređivati, transformisati ili analizirati
+jezički nezavisnih posetiocima (engl.\ \emph{visitors}), bez ikakve svesti o
+izvornom programskom jeziku~\cite{ristovic2020}.
+
+\subsection{Cilj ovog rada}
+
+Cilj ovog seminarskog rada je \textbf{proširiti LINVAST podrškom za Kotlin}.
+Kotlin je moderan, statički tipiziran jezik koji se izvršava na JVM platformi;
+njegova gramatika obuhvata konstrukte koji ne postoje u jezicima koje LINVAST
+već podržava (C, Lua, Go, Java). Konkretno, proširenje zahteva:
+
+\begin{enumerate}
+    \item Preuzimanje ANTLR~4 gramatike za Kotlin i integrisanje generisanog
+          C\# leksera i parsera u projekat.
+    \item Implementaciju klase \texttt{KotlinASTBuilder}, raspoređene u šest
+          parcijalnih \texttt{.cs} datoteka, koja obilazi generisano stablo
+          parsiranja i proizvodi LINVAST AST čvorove.
+    \item Verifikaciju ispravnosti kroz postojeću testnu infrastrukturu.
+\end{enumerate}
+
+Implementacija pokriva: deklaracije \texttt{val}/\texttt{var}
+svojstava, deklaracije funkcija na nivou datoteke, direktive uvoza
+(\texttt{import}), osnovni kontrolni tok (\texttt{if}/\texttt{else},
+\texttt{while}, \texttt{for}), \texttt{return} naredbe, kompletnu hijerarhiju
+aritmetičko-logičkih izraza, kao i deklaracije klasa i interfejsa sa primarnim
+konstruktorom, naslednim tipovima i telom klase. 
+
+Lambda izrazi, ekstenzivne funkcije, koroutine i napredni tipski konstrukti izvan su obuhvata
+i razmatraju se kao budući rad u poglavlju~\ref{sec:future}.
+
+\newpage
+% -----------------------------------------------------------------------
+\section{Arhitektura sistema}
+% -----------------------------------------------------------------------
+
+U ovom poglavlju opisuje se kako je LINVAST rešenje strukturisano i gde
+se Kotlin builder uklapa u tu celinu.
+
+\subsection{Struktura rešenja}
+
+LINVAST rešenje sastoji se od četiri .NET projekta.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Projekat} & \textbf{Sadržaj} \\
+\midrule
+\texttt{LINVAST} &
+    Osnovna biblioteka: apstraktna klasa \texttt{ASTNode},
+    interfejsi \texttt{IASTBuilder<TParser>} i \texttt{IAbstractASTBuilder},
+    atribut \texttt{ASTBuilderAttribute} za automatsko otkrivanje,
+    tipovi izuzetaka i podrška za beleženje. \\
+\addlinespace
+\texttt{LINVAST.Imperative} &
+    Konkretni tipovi AST čvorova za imperativne jezike (\texttt{SourceNode},
+    \texttt{FuncNode}, \texttt{DeclStatNode}, \texttt{IfStatNode}, \ldots) i
+    svi jezički specifični graditelji: C, Lua, Go, Java, \textbf{Kotlin}. \\
+\addlinespace
+\texttt{LINVAST.Imperative.Visitors} &
+    Višekratno upotrebljivi posetioci AST-a: \texttt{ExpressionEvaluator}
+    (sažimanje konstantnih izraza), \texttt{ConstantExpressionEvaluator},
+    \texttt{SymbolicExpressionBuilder}. \\
+\addlinespace
+\texttt{LINVAST.Tests} &
+    Testna skripta zasnovana na NUnit~3, organizovana po direktorijumima
+    za svaki jezik; svaka klasa testova nasleđuje zajedničku osnovnu klasu
+    koja pruža pomoćne metode za proveravanja. \\
+\bottomrule
+\end{tabularx}
+\caption{Struktura projekata u LINVAST rešenju}
+\end{table}
+
+\subsection{Modul Kotlin builder-a}
+
+Kotlin proširenje nalazi se u direktorijumu
+\texttt{LINVAST.Imperative/Builders/Kotlin/} i prati isti raspored koji koristi
+svaki drugi jezički graditelj u projektu:
+
+\begin{verbatim}
+Builders/Kotlin/
++-- ANTLR/
+|   +-- KotlinLexer.g4             (lekser gramatika)
+|   +-- KotlinParser.g4            (parser gramatika)
+|   +-- KotlinLexer.cs             (generisani lekser)
+|   +-- KotlinParser.cs            (generisani parser)
+|   +-- KotlinParserVisitor.cs     (generisani interfejs posetioca)
+|   +-- KotlinParserBaseVisitor.cs (generisana osnovna klasa)
++-- KotlinASTBuilder.cs            (ulazna tacka, deklaracija klase)
++-- KotlinASTBuilder.Declarations.cs
++-- KotlinASTBuilder.Functions.cs
++-- KotlinASTBuilder.Statements.cs
++-- KotlinASTBuilder.Expressions.cs
++-- KotlinASTBuilder.Types.cs
+\end{verbatim}
+
+\begin{sloppypar}
+\texttt{KotlinASTBuilder} je \texttt{sealed partial} klasa koja nasleđuje
+ANTLR-generisanu klasu \texttt{KotlinParserBaseVisitor<ASTNode>} i implementira
+interfejs \texttt{IASTBuilder<KotlinParser>}. Šest izvornih datoteka kompiliraju
+se zajedno putem mehanizma C\# \emph{delimičnih klasa} (engl.\ \emph{partial
+class}), pri čemu svaka pokriva zasebnu oblast odgovornosti.
+\end{sloppypar}
+
+\newpage
+\subsection{Automatsko otkrivanje}
+
+\texttt{ImperativeASTFactory} koristi refleksiju za pronalaženje graditelja u
+vreme izvođenja. Svaka klasa anotirana sa \texttt{[ASTBuilder(".kt")]}
+automatski se bira kada se datoteka sa ekstenzijom \texttt{.kt} prosledi metodi
+\texttt{BuildFromFile}.
+
+\subsection{Tok obrade}
+
+Celokupan put od izvornog Kotlin koda do LINVAST stabla prolazi kroz pet
+uzastopnih koraka prikazanih ispod:
+
+\begin{center}
+\texttt{.kt datoteka}
+$\;\to\;$ \texttt{CharStream}
+$\;\to\;$ \texttt{KotlinLexer}
+$\;\to\;$ \texttt{CommonTokenStream}
+$\;\to\;$ \texttt{KotlinParser}
+$\;\to\;$ \texttt{KotlinASTBuilder}
+$\;\to\;$ \texttt{ASTNode}
+\end{center}
+
+\vspace{5px}
+Metoda \texttt{CreateParser} realizuje prvu polovinu ovog puta:
+
+\begin{lstlisting}[language=CSharp, caption={Kreiranje parsera iz izvornog koda}]
+public KotlinParser CreateParser(string code)
+{
+    ICharStream stream  = CharStreams.fromstring(code);
+    var lexer           = new KotlinLexer(stream);
+    lexer.AddErrorListener(new ThrowExceptionErrorListener());
+
+    ITokenStream tokens = new CommonTokenStream(lexer);
+    var parser          = new KotlinParser(tokens);
+    parser.RemoveErrorListeners();
+    parser.AddErrorListener(new ThrowExceptionErrorListener());
+
+    return parser;
+}
+\end{lstlisting}
+
+\vspace{5px}
+\noindent
+Ulazni tekst se najpre obmotava u \texttt{CharStream} kako bi ANTLR mogao da
+ga čita karakter po karakter. \texttt{KotlinLexer} zatim vrši tokenizaciju, to jest
+grupiše karaktere u tokene poput ključnih reči (\texttt{val}, \texttt{fun}),
+operatora (\texttt{+}, \texttt{<}), literala i identifikatora.
+\texttt{CommonTokenStream} baferuje token niz kako bi parser mogao gledati
+unapred. \texttt{KotlinParser} čita niz tokena i gradi konkretno sintaksičko
+stablo (CST) u skladu sa pravilima Kotlin gramatike. Prilagođeni
+\texttt{ThrowExceptionErrorListener} na oba mesta zamenjuje ANTLR-ov
+podrazumevani listener koji štampa greške na konzoli - svaka sintaksička
+ili leksička greška se odmah pretvara u izuzetak.
+
+\vspace{5px}
+Drugu polovinu puta realizuje metoda \texttt{BuildFromSource}:
+\begin{lstlisting}[language=CSharp, caption={Izgradnja LINVAST stabla iz izvornog koda}]
+public ASTNode BuildFromSource(string code)
+{
+    return this.Visit(this.CreateParser(code).kotlinFile());
+}
+\end{lstlisting}
+
+\vspace{5px}
+\noindent
+Poziv \texttt{.kotlinFile()} nalaže parseru da krene od korenskog gramatičkog
+pravila koje pokriva čitavu datoteku. \texttt{this.Visit(\ldots)} zatim
+pokreće obilazak dobijenog CST-a pomoću metoda posetioca definisanih u
+\texttt{KotlinASTBuilder}-u i njegovim delimičnim datotekama, i vraća koren
+LINVAST stabla.
+
+\newpage
+% -----------------------------------------------------------------------
+\section{Opis rešenja}
+% -----------------------------------------------------------------------
+
+U ovom poglavlju detaljno se opisuju pristup implementaciji, preslikavanje
+pravila Kotlin gramatike u LINVAST čvorove i ključne odluke donete tokom razvoja.
+
+\subsection{Obrazac Posetilac i obilazak CST-a}
+ANTLR~4 generiše klasu \texttt{KotlinParserBaseVisitor<T>} koja implementira
+\textbf{obrazac Posetilac} (engl.\ \emph{Visitor pattern}) nad konkretnim
+sintaksičkim stablom: za svako pravilo gramatike postoji odgovarajuća
+\texttt{Visit*} metoda. Svaka metoda koja nije redefinisana baca izuzetak
+čime se garantuje da svaki neimplementirani konstrukt odmah prijavi grešku
+umesto da prouzrokuje tiho pogrešno ponašanje.
+\texttt{KotlinASTBuilder} redefiniše isključivo metode konstrukata obuhvaćeni u implementacije.
+
+\vspace{2px}
+Svaki posetilac prima kontekstni objekat \texttt{ctx} koji odražava tačno
+ono što je parser pronašao za dato pravilo: ako gramatičko pravilo glasi
+\texttt{block : LCURL statements RCURL}, tada \texttt{ctx} ima metode
+\texttt{.statements()} i pristupnike za leve i desne vitičaste zagrade.
+Obilazak podstabala se vrši rekurzivnim pozivom \texttt{this.Visit(ctx.subRule())}.
+
+\paragraph{Odabir i prosleđivanje na višem nivou.}
+Kotlin gramatika grupiše sve konstrukte na nivou datoteke pod pravilo
+\texttt{topLevelObject} (funkcije, svojstva, klase, sinoniomi tipova).
+Posetilac proverava koji alternativni podizraz nije \texttt{null} i prosleđuje
+ga odgovarajućem posetiaocu:
+
+\begin{lstlisting}[language=CSharp, caption={Odabir vrste konstrukta na nivou datoteke}]
+public override ASTNode VisitTopLevelObject(
+    KotlinParser.TopLevelObjectContext ctx)
+{
+    if (ctx.functionDeclaration() != null)
+        return this.Visit(ctx.functionDeclaration());
+    if (ctx.propertyDeclaration() != null)
+        return this.Visit(ctx.propertyDeclaration());
+    // ... ostale alternative ...
+    throw new NotImplementedException(
+        $"Unsupported top-level object: {ctx.GetText()}");
+}
+\end{lstlisting}
+
+\vspace{5px}
+\noindent
+Isti obrazac primenjuje se i za naredbe unutar bloka - posetilac
+\texttt{VisitStatement} razlikuje deklaracije (\texttt{val x = 1}) od izraza
+koji se koriste kao naredbe (\texttt{x += 1}, pozivi funkcija).
+
+\paragraph{Prenos greške kao izuzetka.}
+Metoda \texttt{Visit} je redefinisana da uhvati \texttt{NullReferenceException}
+koji nastaje kada se pristupi opcionalnom gramatičkom elementu koji nije
+prisutan u konkretnom ulazu, i pretvori ga u \texttt{SyntaxErrorException}
+sa čitljivom porukom. Ovo olakšava dijagnozu problema bez otkrivanja internih
+detalja ANTLR obrade.
+
+\newpage
+\subsection{Izgradnja čvorova: primer deklaracije}
+
+Sledeći isečak prikazuje kako se gradi LINVAST čvor za deklaraciju
+\texttt{val}/\texttt{var} u pet koraka:
+
+\begin{lstlisting}[language=CSharp, caption={Posetilac za deklaraciju svojstva}]
+public override ASTNode VisitPropertyDeclaration(
+    KotlinParser.PropertyDeclarationContext ctx)
+{
+    // 1. keyword: "val" or "var"
+    string keyword = ctx.VAL() != null ? "val" : "var";
+
+    // 2. variable name
+    string name = ctx.variableDeclaration()
+                     .simpleIdentifier().GetText();
+
+    // 3. type name (null if no annotation)
+    string? typeName = ctx.variableDeclaration()
+                          .type()?.GetText();
+
+    // 4. initializer (null if no assignment)
+    ExprNode? init = ctx.expression() is not null
+        ? this.Visit(ctx.expression()).As<ExprNode>()
+        : null;
+
+    // 5. assemble LINVAST nodes
+    var specs = typeName is not null
+        ? new DeclSpecsNode(ctx.Start.Line, keyword, typeName)
+        : new DeclSpecsNode(ctx.Start.Line, keyword);
+    var decl = new VarDeclNode(ctx.Start.Line,
+                   new IdNode(ctx.Start.Line, name), init);
+    return new DeclStatNode(ctx.Start.Line, specs,
+               new DeclListNode(ctx.Start.Line, decl));
+}
+\end{lstlisting}
+
+\noindent
+\textbf{Korak 1 : ključna reč.}
+
+\texttt{ctx.VAL()} i \texttt{ctx.VAR()} vraćaju token ako je odgovarajuća
+ključna reč prisutna u ulazu, ili \texttt{null} ako nije.
+Proverom koja od njih nije \texttt{null} dobija se niska \texttt{"val"} ili
+\texttt{"var"} koja se čuva za izgradnju \texttt{DeclSpecsNode}.
+
+\medskip\noindent
+\textbf{Korak 2 : ime promenljive.}
+
+Gramatičko pravilo \texttt{variableDeclaration} sadrži \texttt{simpleIdentifier}
+koji nosi ime promenljive. Pozivom \texttt{GetText()} dobija se niska, na primer
+\texttt{"x"} za deklaraciju \texttt{val x: Int}.
+
+\medskip\noindent
+\textbf{Korak 3 : tip (opciono).}
+
+Anotacija tipa (\texttt{: Int}) je opcionalna u Kotlinu i ako je izostavljena,
+\texttt{ctx.variableDeclaration().type()} vraća \texttt{null}. Operator
+\texttt{?.} osigurava da se u tom slučaju \texttt{typeName} postavi na
+\texttt{null} umesto da dođe do izuzetka.
+
+\medskip\noindent
+\textbf{Korak 4 : inicijalizator (opciono).}
+
+Ako postoji deo \texttt{= izraz}, rekurzivnim pozivom \texttt{this.Visit}
+se izraz prevodi u \texttt{ExprNode}. Koristi se \texttt{is not null} umesto
+\texttt{!= null} jer \texttt{ASTNode} preopterećuje operator \texttt{==} pa
+obrazac \texttt{is not null} uvek proverava referencu i zaobilazi preopterećeni
+operator.
+
+\medskip\noindent
+\textbf{Korak 5 : sklapanje čvorova.}
+
+Ekstraktovane vrednosti se slažu odozdo nagore: \texttt{DeclSpecsNode} nosi
+ključnu reč i tip, \texttt{VarDeclNode} nosi ime i inicijalizator,
+\texttt{DeclListNode} grupiše deklaratore, a \texttt{DeclStatNode} objedinjuje
+specifikatore i listu u potpunu naredbu deklaracije.
+Ovaj obrazac izdvajanja iz \texttt{ctx} i rekurzivnog sklapanja čvorova
+ponavlja se u svakom posetiaocu graditelja.
+
+\subsection{Hijerarhija izraza i prosleđivanje}
+
+Kotlin gramatika definiše prioritet operatora implicitno kroz lanac pravila
+od najnižeg ka najvišem prioritetu:
+
+\begin{center}
+\texttt{expression}
+$\to$ \texttt{disjunction} (\texttt{||})
+$\to$ \texttt{conjunction} (\texttt{\&\&})
+$\to$ \texttt{equalityComparison} (\texttt{==}, \texttt{!=})
+$\to$ \texttt{comparison} (\texttt{<}, \texttt{>}, \ldots)
+$\to$ \texttt{additiveExpression} (\texttt{+}, \texttt{-})
+$\to$ \texttt{multiplicativeExpression} (\texttt{*}, \texttt{/}, \texttt{\%})
+$\to$ \texttt{prefixUnaryExpression} (\texttt{-}, \texttt{!})
+$\to$ \texttt{atomicExpression}
+$\to$ \texttt{literalConstant} \textbar{} \texttt{simpleIdentifier}
+\end{center}
+
+Svaki nivo posetioca prati isti obrazac: ako postoji samo jedan potomak
+(nema operatora na tom nivou), rezultat se odmah prosleđuje nižem posetiocu
+bez kreiranja novog čvora. Ako postoji više potomaka, gradi se binarni
+LINVAST čvor sa operatorom i levim i desnim operandom. Na primer:
+
+\begin{lstlisting}[language=CSharp, caption={Posetilac za aditivni izraz}]
+public override ASTNode VisitAdditiveExpression(
+    KotlinParser.AdditiveExpressionContext ctx)
+{
+    if (ctx.multiplicativeExpression().Length == 1)
+        return this.Visit(ctx.multiplicativeExpression(0));
+    int line = ctx.Start.Line;
+    ExprNode left  = this.Visit(ctx.multiplicativeExpression(0))
+                         .As<ExprNode>();
+    ExprNode right = this.Visit(ctx.multiplicativeExpression(1))
+                         .As<ExprNode>();
+    var op = ArithmOpNode.FromSymbol(line,
+                 ctx.additiveOperator(0).GetText());
+    return new ArithmExprNode(line, left, op, right);
+}
+\end{lstlisting}
+
+\vspace{5px}
+\begin{sloppypar}
+\noindent
+Razmotrimo šta se dešava pri obradi izraza \texttt{3 + 4 * 2}. Parser gradi
+CST u kome \texttt{additiveExpression} ima dva potomka tipa
+\texttt{multiplicativeExpression}. Pošto levi potomak (\texttt{3}) nema
+operator, poziv \texttt{this.Visit} se rekurzivno spušta kroz lanac pravila
+sve do \texttt{VisitLiteralConstant}, koji proizvodi \texttt{LitExprNode(3)}.
+Desni potomak (\texttt{4 * 2}) ima dva potomka na nivou
+\texttt{multiplicativeExpression}, pa \texttt{VisitMultiplicativeExpression}
+gradi \texttt{ArithmExprNode("*", LitExprNode(4), LitExprNode(2))} na isti
+način. Konačni rezultat je:
+\end{sloppypar}
+
+\begin{verbatim}
+ArithmExprNode ("+")
++-- LitExprNode (3)
++-- ArithmExprNode ("*")
+    +-- LitExprNode (4)
+    +-- LitExprNode (2)
+\end{verbatim}
+
+\noindent
+Prioritet množenja nad sabiranjem je automatski sačuvan strukturom stabla.
+
+\newpage
+\subsection{Testiranje}
+
+Ispravnost svake grupe metoda posetioca proverava se kroz NUnit~3 testove
+koji su organizovani paralelno sa izvornim datotekama graditelja:
+\texttt{DeclarationTests}, \texttt{FunctionTests}, \texttt{StatementTests},
+\texttt{ExpressionTests}, \texttt{ClassTests}, \texttt{TypeTests}. Svaki test kreira \texttt{KotlinASTBuilder},
+poziva \texttt{BuildFromSource} sa konkretnim izvornim kodom i proverava
+strukturu dobijenog stabla. Testovi koriste specijalizovano polazno pravilo
+putem preopterećene metode koja prima \texttt{Func<KotlinParser,
+ParserRuleContext>}, što omogućava parsiranje samo jednog izraza ili naredbe
+bez potrebe za čitavom datotekom:
+
+\begin{lstlisting}[language=CSharp, caption={Primer unit testa za deklaraciju}]
+[Test]
+public void ValTypedDeclarationTest()
+{
+    DeclStatNode node = this.GenerateAST("val x: Int")
+                            .As<DeclStatNode>();
+    Assert.That(node.Specifiers.TypeName, Is.EqualTo("Int"));
+    Assert.That(node.DeclaratorList.Declarators.Single().Identifier,
+                Is.EqualTo("x"));
+}
+\end{lstlisting}
+
+\subsection{Deklaracije}
+\noindent\textit{Izvorni kod: \texttt{KotlinASTBuilder.Declarations.cs}}
+
+\paragraph{Direktive uvoza.}
+\begin{sloppypar}
+Gramatičko pravilo \texttt{importHeader} pokriva sve oblike uvoza.
+Puna putanja se čita metodom \texttt{ctx.identifier().GetText()} i
+čuva u \texttt{ImportNode}. Džoker (\texttt{import kotlin.math.*})
+i pseudonim (\texttt{import Foo as Bar}) se parsiraju bez greške,
+ali se tiho ignorišu.
+\end{sloppypar}
+
+\paragraph{\texttt{val}/\texttt{var} deklaracije.}
+Pravilo \texttt{propertyDeclaration} je centralno za sve deklaracije svojstava.
+Ime promenljive izdvaja se kroz pod-pravilo \texttt{variableDeclaration}
+(\texttt{VisitVariableDeclaration}), koje čita \texttt{simpleIdentifier} i
+opcionalnu tipsku anotaciju i vraća \texttt{VarDeclNode}.
+Graditelj razlikuje tri moguća slučaja na osnovu prisustva tipske anotacije i
+inicijalizatora:
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{lllX}
+\toprule
+\textbf{Ulaz} & \textbf{TypeName} & \textbf{Identifier} & \textbf{Inicijalizator} \\
+\midrule
+\texttt{val x: Int}      & \texttt{"Int"}    & \texttt{"x"} & \texttt{null} \\
+\texttt{val x: Int = 42} & \texttt{"Int"}    & \texttt{"x"} & \texttt{LitExprNode(42)} \\
+\texttt{var y = 0}       & \texttt{"var"}    & \texttt{"y"} & \texttt{LitExprNode(0)} \\
+\bottomrule
+\end{tabularx}
+\caption{Ponašanje \texttt{VisitPropertyDeclaration} za različite oblike ulaza}
+\end{table}
+
+\noindent
+Kada tipska anotacija izostaje (treći red), \texttt{typeName} je \texttt{null} i
+\texttt{DeclSpecsNode} se konstruiše samo sa ključnom reči, pa je
+\texttt{Specifiers.TypeName} jednako \texttt{"var"}. Ovo je privremeno rešenje jer 
+inferencija tipa nije implementirana.
+
+\subsection{Funkcije}
+\noindent\textit{Izvorni kod: \texttt{KotlinASTBuilder.Functions.cs}}
+\medskip
+
+Pravilo gramatike \texttt{functionDeclaration} pokriva deklaracije funkcija na
+nivou datoteke. Graditelj izvlači:
+
+\begin{itemize}
+    \item \textbf{ime} - iz \texttt{ctx.identifier().GetText()};
+    \item \textbf{povratni tip} - iz \texttt{ctx.type(0).GetText()} ukoliko je
+          prisutna dvotačka iza zagrada; u suprotnom se podrazumeva \texttt{"Unit"};
+    \item \textbf{parametre} - obilaskom \texttt{ctx.functionValueParameters()},
+          što daje \texttt{FuncParamsNode} sa listom \texttt{FuncParamNode}
+          objekata; svaki parametar se gradi iz parova (tip, ime);
+    \item \textbf{telo} - obilaskom \texttt{ctx.functionBody()} koji proizvodi
+          \texttt{BlockStatNode}; ukoliko tela nema (apstraktna ili interfejs
+          funkcija), prosledi se \texttt{null}.
+\end{itemize}
+
+\begin{sloppypar}
+Sintaksa sa izraznim telom (\texttt{fun double(x: Int) = x * 2}) nije
+podržana i baca \texttt{NotImplementedException}. Podrazumevane vrednosti
+parametara (\texttt{fun greet(name: String = "World")}) se parsiraju bez
+greške, ali podrazumevana vrednost se tiho odbacuje.
+\end{sloppypar}
+
+\subsection{Deklaracije klasa i interfejsa}
+\noindent\textit{Izvorni kod: \texttt{KotlinASTBuilder.Declarations.cs}}
+\medskip
+
+Pravilo gramatike \texttt{classDeclaration} pokriva sve oblike deklaracija klasa
+i interfejsa. Graditelj proverava prisustvo ključnih reči \texttt{CLASS} i
+\texttt{INTERFACE} i na osnovu toga odlučuje koji LINVAST čvor da proizvede:
+
+\begin{lstlisting}[language=CSharp, caption={Posetilac za deklaraciju klase}]
+public override ASTNode VisitClassDeclaration(
+    KotlinParser.ClassDeclarationContext ctx)
+{
+    int line = ctx.Start.Line;
+    var identifier = new IdNode(line, ctx.simpleIdentifier().GetText());
+
+    TypeNameListNode typeParams = ctx.typeParameters() != null
+        ? this.Visit(ctx.typeParameters()).As<TypeNameListNode>()
+        : new TypeNameListNode(line);
+
+    TypeNameListNode baseTypes = ctx.delegationSpecifiers() != null
+        ? this.Visit(ctx.delegationSpecifiers()).As<TypeNameListNode>()
+        : new TypeNameListNode(line);
+
+    var declarations = new List<DeclStatNode>();
+
+    if (ctx.primaryConstructor() != null) {
+        FuncParamsNode ctorParams =
+            this.Visit(ctx.primaryConstructor()).As<FuncParamsNode>();
+        FuncDeclNode ctorDecl = new FuncDeclNode(line, identifier, ctorParams);
+        DeclSpecsNode ctorSpecs = new DeclSpecsNode(line, identifier.Identifier);
+        declarations.Add(new DeclStatNode(line, ctorSpecs,
+                             new DeclListNode(line, ctorDecl)));
+    }
+
+    if (ctx.classBody() != null)
+        declarations.AddRange(
+            this.Visit(ctx.classBody()).As<BlockStatNode>()
+                .Children.Cast<DeclStatNode>());
+
+    var declSpecs = new DeclSpecsNode(line, identifier.Identifier);
+    var typeDecl  = new TypeDeclNode(line, identifier,
+                        typeParams, baseTypes, declarations);
+
+    if (ctx.INTERFACE() != null)
+        return new InterfaceNode(line, declSpecs, typeDecl);
+    return new ClassNode(line, declSpecs, typeDecl);
+}
+\end{lstlisting}
+
+\newpage
+\paragraph{Primarni konstruktor.}
+Kotlin dopušta da se konstruktor definiše direktno u zaglavlju klase:
+\newline
+\texttt{class Person(val name: String, var age: Int)}. 
+\newline
+Pravilo gramatike \texttt{primaryConstructor} sadrži \texttt{classParameters} to jest listu parametara
+u zagradama. Svaki parametar (\texttt{classParameter}) razlikuje se od parametra
+funkcije po tome što može imati prefiks \texttt{val}/\texttt{var} (čime se ujedno
+deklariše i svojstvo klase). Primarni konstruktor se preslikava u \texttt{FuncDeclNode}
+koji nosi ime klase kao identifikator i parametre kao \texttt{FuncParamsNode}, a
+zatim se uvija u \texttt{DeclStatNode} i dodaje na početak liste članova klase.
+
+\paragraph{Nasledni tipovi.}
+Lista naslednih tipova iza dvotačke (\texttt{class Dog : Animal}) čita se iz
+\texttt{delegationSpecifiers}. Svaki specifikator može biti običan tip
+(\texttt{userType}) ili poziv konstruktora (\texttt{constructorInvocation}). U
+oba slučaja izvlači se samo ime tipa i čuva u \texttt{TypeNameListNode}.
+Eksplicitna delegacija (\texttt{by} izraz) baca \texttt{NotImplementedException}.
+
+\paragraph{Telo klase.}
+\texttt{VisitClassBody} obilazi sve \texttt{classMemberDeclaration} i skuplja ih
+u \texttt{BlockStatNode}. \texttt{VisitClassMemberDeclaration} prosleđuje
+deklaracije funkcija i svojstava postojećim posetiocima
+\newline
+(\texttt{VisitFunctionDeclaration}, \texttt{VisitPropertyDeclaration}), a za
+ugnežđene klase poziva \texttt{VisitClassDeclaration} rekurzivno. Ostali
+tipovi članova (sekundarni konstruktori, \texttt{init} blokovi, prateći objekti)
+\newline
+bacaju \texttt{NotImplementedException}.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{lllX}
+\toprule
+\textbf{Ulaz} & \textbf{Čvor} & \textbf{Identifier} & \textbf{Napomena} \\
+\midrule
+\texttt{class Empty} &
+    \texttt{ClassNode} & \texttt{Empty} &
+    Bez konstruktora ni tela \\
+\texttt{class Point(val x: Int)} &
+    \texttt{ClassNode} & \texttt{Point} &
+    Konstruktor kao prvi član \\
+\texttt{class Dog : Animal} &
+    \texttt{ClassNode} & \texttt{Dog} &
+    \texttt{BaseTypes = ["Animal"]} \\
+\texttt{interface Printable \{ \}} &
+    \texttt{InterfaceNode} & \texttt{Printable} &
+    Prazno telo \\
+\bottomrule
+\end{tabularx}
+\caption{Ponašanje \texttt{VisitClassDeclaration} za različite oblike ulaza}
+\end{table}
+
+\subsection{Naredbe kontrole toka}
+\noindent\textit{Izvorni kod: \texttt{KotlinASTBuilder.Statements.cs}}
+\paragraph{\texttt{if}/\texttt{else}.}
+Pravilo \texttt{ifExpression} može imati jednu ili dve grane tela tipa
+\texttt{controlStructureBody}. Graditelj proverava prisustvo drugog tela i
+gradi binarni ili ternarni \texttt{IfStatNode}:
+
+\begin{itemize}
+    \item \texttt{if (x > 0) \{ return x \}} $\to$
+          \texttt{IfStatNode(uslov, tada)} (bez \texttt{else});
+    \item \texttt{if (x > 0) \{ return x \} else \{ return 0 \}} $\to$
+          \texttt{IfStatNode(uslov, tada, inače)}.
+\end{itemize}
+
+Telo grane može biti blok \texttt{\{ \ldots \}} (daje \texttt{BlockStatNode}
+putem \texttt{VisitBlock}) ili pojedinačan izraz bez vitičastih zagrada (daje
+\texttt{ExprStatNode}).
+
+\paragraph{\texttt{while}.}
+Pravilo \texttt{whileExpression} uvek daje \texttt{WhileStatNode} sa uslovom
+i telom. Ako telo nije prisutno, prosleđuje se prazan \texttt{BlockStatNode}.
+
+\paragraph{\texttt{for}.}
+Pravilo \texttt{forExpression} preslikava se u \texttt{ForeachStatNode}.
+Graditelj izdvaja promenljivu iteratora iz \texttt{variableDeclaration},
+iterable iz \texttt{expression} i telo iz \texttt{controlStructureBody}.
+Podržana je i destrukturisana iteracija (\texttt{multiVariableDeclaration}),
+gde se više promenljivih pakuje u jedan \texttt{DeclStatNode}.
+
+\paragraph{\texttt{return}.}
+Pravilo \texttt{jumpExpression} obuhvata \texttt{return}, \texttt{break},
+\texttt{continue} i \texttt{throw}. Implementirani su samo oblici naredbe
+\texttt{return}:
+
+\begin{itemize}
+    \item \texttt{return 42} $\to$
+          \texttt{JumpStatNode(Return, LitExprNode(42))};
+    \item \texttt{return} $\to$
+          \texttt{JumpStatNode(Return)} bez izraza.
+\end{itemize}
+
+\noindent
+Naredbe \texttt{break}, \texttt{continue} i \texttt{throw} bacaju
+\texttt{NotImplementedException}. Petlja \texttt{do-while} takođe nije
+implementirana.
+
+\paragraph{Dodela vrednosti.}
+Pravilo \texttt{expression} pokriva i naredbe dodele (\texttt{x = 1},
+\texttt{x += 1} itd.). Graditelj proverava prisustvo operatora dodele i
+gradi \texttt{ExprStatNode} koji sadrži \texttt{AssignExprNode} sa levim
+operandom, operatorom i desnim operandom.
+
+\subsection{Izrazi}
+\noindent\textit{Izvorni kod: \texttt{KotlinASTBuilder.Expressions.cs}, \texttt{KotlinASTBuilder.Types.cs}}
+\medskip
+
+Svi aritmetički, logički i relacioni izrazi grade se obilaskom hijerarhije
+pravila opisane u odeljku~3.3. Podrška po tipu izraza je sledeća:
+
+\begin{itemize}
+    \item \textbf{Literali} (\texttt{literalConstant}): celi brojevi, decimalni
+          brojevi, logičke vrednosti (\texttt{true}/\texttt{false}) i
+          \texttt{null} se preslikavaju u \texttt{LitExprNode} odnosno
+          \texttt{NullLitExprNode}. Decimalni brojevi se parsiraju sa
+          \texttt{CultureInfo.InvariantCulture} kako bi separator uvek bila
+          tačka, bez obzira na lokalna podešavanja operativnog sistema.
+    \item \textbf{Identifikatori}: svaki \texttt{simpleIdentifier} daje
+          \texttt{IdNode}. Kotlin dozvoljava meke ključne reči (\texttt{get},
+          \texttt{set}, \texttt{field} itd.) kao identifikatore, a budući da
+          \texttt{VisitSimpleIdentifier} čita tekst tokena putem
+          \texttt{ctx.GetText()}, ovi slučajevi se obrađuju automatski.
+    \item \textbf{Aritmetika}: \texttt{+}, \texttt{-}, \texttt{*}, \texttt{/},
+          \texttt{\%} daju \texttt{ArithmExprNode}.
+    \item \textbf{Logika}: \texttt{||}, \texttt{\&\&} daju \texttt{LogicExprNode};
+          \texttt{!} (negacija) daje \texttt{UnaryExprNode}.
+    \item \textbf{Poređenje}: \texttt{<}, \texttt{>}, \texttt{<=}, \texttt{>=},
+          \texttt{==}, \texttt{!=} daju \texttt{RelExprNode}.
+    \item \textbf{Zagrade}: \texttt{(izraz)}  zagrade se skidaju a unutrašnji
+          izraz se obilazi; u stablu ne postoji zaseban čvor za zagrade.
+\end{itemize}
+
+\paragraph{Rezolucija tipova (\texttt{KotlinASTBuilder.Types.cs}).}
+Svi tipski nazivi koji se pojavljuju u deklaracijama, parametrima funkcija i
+parametrima klasa prolaze kroz četiri posetioca iz ove datoteke:
+
+\begin{itemize}
+    \item \texttt{VisitUserType} - spaja segmente kvalifikovanog naziva tačkama
+          i proizvodi \texttt{TypeNameNode}, npr.\ \texttt{kotlin.io.File};
+    \item \texttt{VisitSimpleUserType} - čita jednostavan naziv tipa i ignoriše
+          generičke argumente (\texttt{List<String>} $\to$ \texttt{TypeNameNode("List")});
+    \item \texttt{VisitNullableType} - dodaje \texttt{?} na kraj naziva tipa,
+          npr.\ \texttt{String?} $\to$ \texttt{TypeNameNode(String?)};
+    \item \texttt{VisitTypeReference} - prosleđuje na \texttt{VisitUserType} ili
+          rekurzivno skida zagrade; baca izuzetak samo za \texttt{dynamic}.
+\end{itemize}
+
+\noindent
+Tip funkcije (\texttt{(Int) -> String}) baca \texttt{NotImplementedException}.
+
+\newpage
+\subsection{Ilustrativni primer}
+
+Razmotrimo sledeću Kotlin funkciju koja izračunava apsolutnu vrednost celog broja:
+
+\begin{lstlisting}[language=Kotlin, caption={Primer Kotlin funkcije -- apsolutna vrednost}]
+fun absolute(x: Int): Int {
+    if (x < 0) {
+        return -x
+    }
+    return x
+}
+\end{lstlisting}
+
+Kada se ovaj isečak prosledi metodi \texttt{BuildFromFile}, \texttt{KotlinASTBuilder}
+obilazi stablo parsiranja i gradi sledeću LINVAST reprezentaciju:
+
+\begin{verbatim}
+SourceNode
++-- FuncNode (povratni tip: "Int", ime: "absolute")
+    +-- FuncParamsNode
+    |   +-- FuncParamNode
+    |       +-- DeclSpecsNode ("Int")
+    |       +-- VarDeclNode ("x")
+    +-- BlockStatNode
+        +-- IfStatNode
+        |   +-- RelExprNode ("<")
+        |   |   +-- IdNode ("x")
+        |   |   +-- LitExprNode (0)
+        |   +-- BlockStatNode
+        |       +-- JumpStatNode (Return)
+        |           +-- UnaryExprNode ("-")
+        |               +-- IdNode ("x")
+        +-- JumpStatNode (Return)
+            +-- IdNode ("x")
+\end{verbatim}
+
+Primetimo da LINVAST stablo ne sadrži informacije o konkretnoj sintaksi Kotlina
+(zagrade, dvotačke, ključne reči) - sačuvana je isključivo semantička struktura
+koda. Ista analiza primenjena na semantički ekvivalentnu C funkciju proizvela bi
+strukturno identično stablo~\cite{ristovic2020}, što demonstrira suštinski cilj
+biblioteke.
+
+% -----------------------------------------------------------------------
+\section{Budući rad}
+\label{sec:future}
+% -----------------------------------------------------------------------
+
+Naredni koraci u razvoju Kotlin builder-a obuhvataju kako uklanjanje
+postojećih ograničenja, tako i proširenje obuhvata na konstrukte koji
+trenutno bacaju \texttt{NotImplementedException}:
+
+\begin{itemize}
+    \item \textbf{Lambda izrazi i funkcije višeg reda} - Kotlinovi
+          funkcionalni konstrukti zahtevaju proširenje ili aproksimaciju
+          LINVAST-a, koji trenutno ne poseduje odgovarajući čvor.
+    \item \textbf{Opsezi} - podrška za operator \texttt{..}
+          (\texttt{1..10} trenutno baca \texttt{NotImplementedException}).
+    \item \textbf{Operatori bezbednosti od null vrednosti} -
+          \texttt{?.}, \texttt{?:} (Elvis operator) i \texttt{!!}.
+    \item \textbf{Pozivi metoda i pristup poljima} - postfiksne operacije
+          poput \texttt{obj.method()} i \texttt{obj.field}.
+    \item \textbf{Inferencija tipa} - automatsko određivanje tipa kada
+          tipska anotacija izostaje (\texttt{var y = 0} treba da dobije
+          \texttt{TypeName = "Int"}, a ne \texttt{"var"}).
+    \item \textbf{Sekundarni konstruktori, \texttt{init} blokovi i
+          prateći objekti} - konstrukti unutar tela klase koji trenutno
+          bacaju izuzetak.
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{ristovic2020}
+    I.\ Ristović,
+    \textit{Jezički invarijantna provera semantičke ekvivalentnosti strukturno
+    sličnih segmenata imperativnog koda},
+    master rad, Matematički fakultet, Univerzitet u Beogradu, 2020.
+\end{thebibliography}
+
+\end{document}

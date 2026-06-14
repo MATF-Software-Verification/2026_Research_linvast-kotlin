@@ -98,7 +98,6 @@ namespace LINVAST.Imperative.Builders.Kotlin
         }
 
         // Grammar rule: expression : disjunction (assignmentOperator disjunction)*
-        // TODO: support assignment operators (=, +=, -=, *=, /=, %=)
         public override ASTNode VisitExpression(KotlinParser.ExpressionContext ctx)
         {
             int line = ctx.Start.Line;   
