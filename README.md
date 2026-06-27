@@ -73,7 +73,8 @@ The `samples/` directory contains example Kotlin files. Use the `LINVAST.Runner`
 | `samples/valid/` | `Functions.kt` | Function declarations with parameters, return types, and bodies |
 | `samples/valid/` | `Expressions.kt` | Arithmetic, logical, comparison, and unary expressions |
 | `samples/valid/` | `ControlFlow.kt` | `if`/`else`, `while`, and assignment operators |
-| `samples/unsupported/` | `ForLoop.kt` | Throws `NotImplementedException` - `for` is not supported |
+| `samples/valid/` | `ForLoop.kt` | `for`/`in` loops, including destructuring |
+| `samples/valid/` | `Classes.kt` | Class and interface declarations, primary constructors, base types |
 | `samples/unsupported/` | `Lambdas.kt` | Throws `NotImplementedException` - lambdas are not supported |
 | `samples/unsupported/` | `ExpressionBody.kt` | Throws `NotImplementedException` - expression body functions are not supported |
 
@@ -101,8 +102,9 @@ Tests live in `LINVAST.Tests/Imperative/Builders/Kotlin/` and use NUnit 3.
 | `TypeTests.cs` | Kotlin type visitors: user types, nullable types, function types |
 | `DeclarationTests.cs` | Variable and property declarations (`val`, `var`) |
 | `ExpressionTests.cs` | Arithmetic, logic, comparison, unary expressions, literals, identifiers |
-| `StatementTests.cs` | `if`, `while`, `return`, assignment expressions |
+| `StatementTests.cs` | `if`, `while`, `for`, `return`, assignment expressions |
 | `FunctionTests.cs` | Function declarations, parameter lists, function bodies |
+| `ClassTests.cs` | Class and interface declarations, primary constructors, base types |
 | `SourceTests.cs` | Top-level Kotlin file parsing |
 
 Run all tests:
@@ -126,7 +128,7 @@ dotnet test --filter "FullyQualifiedName~Builders.Kotlin.TypeTests"
 Expected output:
 
 ```
-Passed! - Failed: 0, Passed: 81, Skipped: 0, Total: 81
+Passed! - Failed: 0, Passed: 97, Skipped: 0, Total: 97
 ```
 
 ---
@@ -137,7 +139,6 @@ The following Kotlin constructs are not yet supported and will throw `NotImpleme
 
 | Construct | Example |
 |-----------|---------|
-| `for` loops | `for (x in list) { }` |
 | `do-while` loops | `do { } while (cond)` |
 | `break` / `continue` | Inside loops |
 | Expression body functions | `fun double(x: Int) = x * 2` |
